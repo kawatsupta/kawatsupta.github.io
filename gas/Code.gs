@@ -204,7 +204,8 @@ function saveImageToMarkdown(inlineImage) {
   file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
 
   const fileId = file.getId();
-  return '![写真](https://drive.google.com/uc?id=' + fileId + '&export=view)';
+  // lh3.googleusercontent.com は Google の CDN で、uc?id= より安定して画像表示できる
+  return '![写真](https://lh3.googleusercontent.com/d/' + fileId + ')';
 }
 
 // MIMEタイプから拡張子を返す
