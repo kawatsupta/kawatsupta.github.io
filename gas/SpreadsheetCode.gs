@@ -52,10 +52,13 @@ function publishSiteInfo() {
       .map(function(row) {
         var title = String(row[0]).trim();
         var membersOnly = title.indexOf('【会員限定】') >= 0;
+        // 会員限定の場合: C列にURLが入っていればそれを使う。未入力なら /members/ にフォールバック
+        var url = String(row[2] || '').trim();
+        if (membersOnly && !url) url = '/kawatsu-pta-web/members/';
         return {
           name:         title.replace('【会員限定】', '').trim(),
           desc:         String(row[1] || '').trim(),
-          url:          membersOnly ? '/kawatsu-pta-web/members/' : String(row[2] || '#').trim(),
+          url:          url,
           members_only: membersOnly
         };
       });

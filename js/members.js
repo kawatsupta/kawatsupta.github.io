@@ -7,7 +7,18 @@
  * - 復号結果が valid JSON かどうかで認証チェックを兼ねる
  */
 
-// Enter キーでログイン
+// ===== セクション設定（URL パラメータ ?section=sports|newsletter）=====
+
+var SECTION_CONFIG = {
+  sports:     { title: 'スポ少情報' },
+  newsletter: { title: '広報誌「らくざん」バックナンバー' }
+};
+
+function getCurrentSection() {
+  return new URLSearchParams(location.search).get('section') || null;
+}
+
+// DOMContentLoaded: Enter キー対応 + ページタイトル初期化
 document.addEventListener('DOMContentLoaded', function () {
   document.getElementById('member-pw').addEventListener('keydown', function (e) {
     if (e.key === 'Enter') memberLogin();
@@ -15,6 +26,14 @@ document.addEventListener('DOMContentLoaded', function () {
   document.getElementById('member-id').addEventListener('keydown', function (e) {
     if (e.key === 'Enter') document.getElementById('member-pw').focus();
   });
+
+  // URL パラメータに応じてページタイトルを変更（ログイン前から）
+  var section = getCurrentSection();
+  if (section && SECTION_CONFIG[section]) {
+    var label = '| ' + SECTION_CONFIG[section].title;
+    document.getElementById('page-title').textContent = label;
+    document.title = SECTION_CONFIG[section].title + ' | 川津小学校PTA';
+  }
 });
 
 // ===== 暗号化ユーティリティ（XOR + SHA-256 キー）=====
@@ -145,6 +164,14 @@ function showContent(content) {
 
   if (!hasContent) {
     document.getElementById('section-empty').style.display = 'block';
+  }
+
+  // セクションフィルタ: ?section=sports → 広報誌を非表示、?section=newsletter → スポ少を非表示
+  var section = getCurrentSection();
+  if (section === 'sports') {
+    document.getElementById('section-newsletter').style.display = 'none';
+  } else if (section === 'newsletter') {
+    document.getElementById('section-sports').style.display = 'none';
   }
 }
 
