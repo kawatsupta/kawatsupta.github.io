@@ -123,19 +123,79 @@ pwa:
 
 ---
 
-## 現在の git ログ（最新順）
+### セッション 3（2026-03-10）— 会員限定ページの実装
+
+#### 実施内容
+
+**会員限定ページの新規実装**（`578b92f`）
+
+XOR + SHA-256 によるクライアントサイド復号方式で会員限定コンテンツを保護。
+
+セキュリティ設計のポイント:
+- パスワードを JavaScript ソースに書かない（復号キー = ユーザー入力パスワードの SHA-256）
+- 復号後の JSON パース成否を認証チェックとして利用
+- GAS の `MEMBER_PASSWORD` スクリプトプロパティにパスワードを安全に保管
+- `data/members.json`（`_data/` ではなく `data/`）に暗号化データを格納（Jekyll が `_data/` を静的ファイルとして配信しないため）
+
+追加ファイル:
+- `members.html` — ログインフォーム + コンテンツエリア
+- `js/members.js` — 復号・認証・コンテンツ描画ロジック
+- `data/members.json` — GAS が push する暗号化済みデータ
+
+GAS に追加した関数:
+- `publishMembersInfo()` — スポ少情報・広報誌シートを読み取り、XOR 暗号化して push
+- `encryptXOR(text, password)` — `Utilities.computeDigest(SHA_256)` を 32 バイトキーとして使用
+
+**ページ URL 修正**（`6b5f94b`）
+
+Jekyll は `members.html` から `members/index.html` を生成するため、URL は `/members.html` ではなく `/members/` が正しい。`_data/info.json` と `gas/SpreadsheetCode.gs` のフォールバック URL を修正。
+
+**セクション別表示の実装**（`8e6f3dd`）
+
+広報誌とスポ少情報を URL パラメータ（`?section=newsletter` / `?section=sports`）で切り替える方式を採用（ページを分けず単一ページ内でフィルタリング）。
+
+- `js/members.js` に `getCurrentSection()` を追加
+- DOMContentLoaded でページタイトルをセクション名に書き換え
+- コンテンツ表示後にセクションに応じて不要な区画を非表示
+- `_data/info.json` のリンク先を `/members/?section=newsletter` / `/members/?section=sports` に変更
+- GAS の `publishSiteInfo()` が C 列の URL を読み取るよう更新（未入力の場合 `/members/` にフォールバック）
+
+**セクションラベル重複の修正**（`87a33b5`）
+
+`js/members.js` がページタイトル（`#page-title`）をセクション名で書き換えるため、コンテンツ内にも同名の `<div class="section-title">` があると 2 重表示になっていた。コンテンツ内の section-title div を削除して解消。
+
+**ログイン情報の自動保存**（`5e609d3`）
+
+毎回パスワードを入力する手間を解消するため `localStorage` による自動ログインを実装。
+
+| 動作 | 内容 |
+|---|---|
+| 初回ログイン成功時 | パスワードを `localStorage` に保存 |
+| 次回以降のアクセス | 保存済みパスワードで自動ログイン |
+| パスワード変更後 | 復号失敗 → 保存済みを自動削除 → ログインフォームを表示 |
+| ログアウトボタン | 保存情報を削除してログインフォームへ戻る（共用端末対策） |
+
+**GAS スプレッドシートの運用上の注意点（判明した問題）**
+
+- スプレッドシートの C 列 URL セルはリンク付きセルになっていると、`getValues()` が表示テキストではなく内部値を返す場合がある
+- URL を更新する際は**セルを完全削除してから入力し直す**こと
+- URL は `http://` を付けず `/kawatsu-pta-web/members/?section=...` のようにパス形式で入力する
+- GAS スクリプトエディタのコードを `gas/SpreadsheetCode.gs` の最新版と同期させること（ローカルの `.gs` ファイルは参照用であり、実際の GAS とは別管理）
+
+---
+
+## 現在の git ログ（最新順・参考）
 
 ```
+（GAS による定期更新コミット多数）
+5e609d3 会員ページにログイン情報の自動保存を追加
+87a33b5 会員ページのセクションタイトル重複を修正
+8e6f3dd feat: 会員限定ページをセクション別に分離（?section=sports|newsletter）
+6b5f94b fix: members リンクを /members.html から /members/ に修正
+578b92f feat: 会員限定ページを実装（XOR暗号化 + クライアントサイド復号）
 5715064 ご挨拶の改行対応 & ヒーロー画像を全体表示に修正
-d012e86 役立ち情報・リンク集を更新
-a6d7a61 ご挨拶を更新
 4fdfae7 GAS をドキュメント用とスプレッドシート用に分離
-340fb65 スプレッドシート連携：テンプレートとGASスクリプト更新
 3b100cc スプレッドシート連携：ご挨拶・役立ち情報・リンク集をデータ化
-217fc34 テスト記事です を公開
-f84e267 Google フォーム埋め込み・ヒーロー画像設定・relative_url バグ修正
-101c4b0 GAS: 太字・斜体・文字色・フォントサイズをMarkdown/HTMLに変換するconvertTextToMarkdownを追加
-...（以下省略）
 e0d7b44 初回公開: Jekyll/Markdown ベース PTA サイト
 ```
 
@@ -151,17 +211,21 @@ PTA-web/
 ├── _data/
 │   ├── greeting.json     # ご挨拶テキスト（スプレッドシートから自動更新）
 │   └── info.json         # 役立ち情報・リンク集（スプレッドシートから自動更新）
+├── data/
+│   └── members.json      # 会員限定データ（GAS が暗号化して push）
 ├── _posts/               # 記事（GAS が自動生成・push）
 ├── css/
 │   └── style.css         # サイトスタイル
 ├── js/
-│   └── auth.js           # 会員限定コンテンツ制御
+│   ├── members.js        # 会員限定ページ：復号・認証・自動ログインロジック
+│   └── auth.js           # （旧）会員限定コンテンツ制御
 ├── gas/
 │   ├── Code.gs           # Google ドキュメントバインド用（記事投稿）
-│   └── SpreadsheetCode.gs # スプレッドシートバインド用（サイト情報更新）
+│   └── SpreadsheetCode.gs # スプレッドシートバインド用（サイト情報・会員限定更新）
 ├── docs/
 │   ├── requirements.md   # 要件定義書
 │   └── setup.md          # 初期設定手順
+├── members.html          # 会員限定ページ（ログインフォーム + コンテンツ）
 ├── index.html            # ホーム
 ├── event.html            # お知らせ一覧
 ├── info.html             # 役立ち情報
@@ -174,11 +238,10 @@ PTA-web/
 
 | # | タスク | 優先度 |
 |---|---|---|
-| 1 | キャッシュ問題：ブラウザの古い Service Worker を削除して動作確認 | 高 |
+| 1 | GitHub Actions エラーの調査・修正 | 高 |
 | 2 | Google フォームの作成（コンタクト用） | 高 |
 | 3 | Google ドライブの整備（会員限定ファイルの共有設定） | 中 |
-| 4 | 担当者向けマニュアルの作成 | 中 |
+| 4 | 担当者向けマニュアルの作成（GAS 操作手順・スプレッドシート運用ルールを含む） | 中 |
 | 5 | 公開・旧サイトとの並行運用開始 | 中 |
-| 6 | GAS スクリプトプロパティの設定手順をマニュアルに追記 | 中 |
-| 7 | 旧サイトアーカイブ（Google ドライブに保存） | 低 |
-| 8 | 旧サイト閉鎖 | 低（移行安定後） |
+| 6 | 旧サイトアーカイブ（Google ドライブに保存） | 低 |
+| 7 | 旧サイト閉鎖 | 低（移行安定後） |
