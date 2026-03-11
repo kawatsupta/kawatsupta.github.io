@@ -257,10 +257,7 @@ a:hover {
   font-weight: bold;
   color: #555;
 }
-.post-meta-sep {
-  margin: 0 6px;
-  color: #bbb;
-}
+
 .post-body {
   background: white;
   border: 1px solid #ddd;
