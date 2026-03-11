@@ -26,6 +26,7 @@ a:hover {
   padding: 0;
   display: flex;
   align-items: stretch;
+  height: 70px;
 }
 #header .header-left {
   display: flex;
