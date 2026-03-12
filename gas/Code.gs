@@ -315,20 +315,47 @@ function convertDocToMarkdown(doc, title, publishDate, articleId) {
       const heading = para.getHeading();
       const numParaChildren = para.getNumChildren();
       let textContent = '';
+      let imageGroup  = [];  // 同じ段落内の連続画像をまとめる
+
+      // 画像グループを Markdown/HTML に変換して出力する内部関数
+      const flushImages = function() {
+        if (imageGroup.length === 0) return;
+        if (imageGroup.length === 1) {
+          // 1枚だけ → 通常の Markdown 画像記法
+          markdown += imageGroup[0] + '\n\n';
+        } else {
+          // 複数枚 → flexbox で横並び表示
+          const imgTags = imageGroup.map(function(md) {
+            const m = md.match(/!\[[^\]]*\]\(([^)]+)\)/);
+            return m
+              ? '<img src="' + m[1] + '" alt="写真" style="flex:1;min-width:0;max-width:100%;">'
+              : md;
+          });
+          markdown += '<div style="display:flex;gap:8px;flex-wrap:wrap;">\n' +
+                      imgTags.join('\n') + '\n</div>\n\n';
+        }
+        imageGroup = [];
+      };
 
       for (let j = 0; j < numParaChildren; j++) {
         const child = para.getChild(j);
         if (child.getType() === DocumentApp.ElementType.INLINE_IMAGE) {
+          // テキストが先にあれば先に出力してから画像グループに追加
           if (textContent.trim()) {
+            flushImages();
             markdown += applyHeading(heading, textContent.trim()) + '\n\n';
             textContent = '';
           }
-          markdown += saveImageToMarkdown(child.asInlineImage(), articleId) + '\n\n';
+          imageGroup.push(saveImageToMarkdown(child.asInlineImage(), articleId));
         } else if (child.getType() === DocumentApp.ElementType.TEXT) {
-          textContent += convertTextToMarkdown(child.asText());
+          const t = convertTextToMarkdown(child.asText());
+          // テキストが来たら溜まっている画像グループを先に出力
+          if (t.trim()) flushImages();
+          textContent += t;
         }
       }
 
+      flushImages();  // 段落末尾に残った画像を出力
       if (textContent.trim()) {
         markdown += applyHeading(heading, textContent.trim()) + '\n\n';
       }
