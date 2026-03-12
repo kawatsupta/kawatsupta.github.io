@@ -135,6 +135,12 @@ function _publish() {
   }
 
   try {
+    // 新規の場合：採番した ID をドキュメントのヘッダーテーブルに先に書き戻す
+    // （GitHub プッシュが失敗しても ID が保持されるよう、最初に実行）
+    if (isNew && headerTable) {
+      headerTable.getCell(0, 1).setText(articleId);
+    }
+
     // 更新の場合：旧画像を削除してからMarkdown変換（新画像を保存）
     if (!isNew) {
       clearDriveFolder(articleId);
@@ -153,11 +159,6 @@ function _publish() {
 
     // GitHub に push
     pushToGitHub(filepath, markdown, (isNew ? '記事を公開: ' : '記事を更新: ') + title);
-
-    // 新規の場合：採番した ID をドキュメントのヘッダーテーブルに書き戻す
-    if (isNew && headerTable) {
-      headerTable.getCell(0, 1).setText(articleId);
-    }
 
     ui.alert(
       '公開完了',
