@@ -2,11 +2,10 @@
  * 川津小学校PTA サイト公開スクリプト（Jekyll / Markdown 版）
  *
  * 【使い方】
- * 1. Google ドキュメントを開く
- * 2. メニューに「PTA公開」が表示される
- * 3. 「新規記事テンプレートを作成」でひな形ドキュメントを作成
- * 4. ファイル名を記事タイトルに変更し本文を書く
- * 5. 「このドキュメントを公開する」をクリック → 公開日をダイアログで入力
+ * 1. Google ドキュメントを開く（ドキュメントのファイル名 = 記事タイトル）
+ * 2. 本文を書く
+ * 3. メニュー「PTA公開」→「このドキュメントを公開する」をクリック
+ * 4. 公開日ダイアログで日付を確認・修正して「次へ」→ 内容を確認して「公開する」
  *
  * 【記事 ID の仕組み】
  * ドキュメントの固有 ID（URL の d/ 以降）を記事 ID として使用します。
@@ -21,126 +20,170 @@
 function onOpen() {
   DocumentApp.getUi()
     .createMenu('PTA公開')
-    .addItem('新規記事テンプレートを作成', 'createNewArticle')
-    .addSeparator()
     .addItem('このドキュメントを公開する', 'publishDocument')
     .addSeparator()
     .addItem('この記事を削除する', 'deleteArticle')
     .addToUi();
 }
 
-// ===== 新規記事テンプレートを作成 =====
-function createNewArticle() {
-  const doc = DocumentApp.create('【タイトルを入力】');
-
-  // 本文の初期テキスト
-  const body = doc.getBody();
-  body.clear();
-  body.appendParagraph('ここに本文を書いてください。');
-
-  const ui = DocumentApp.getUi();
-  ui.alert(
-    '新規記事テンプレートを作成しました',
-    '以下の URL を開いて記事を書いてください。\n\n' + doc.getUrl() +
-    '\n\n【記入方法】\n' +
-    '・ドキュメントのファイル名 → 記事タイトルになります\n' +
-    '・公開日: 「このドキュメントを公開する」クリック時にダイアログで入力します\n\n' +
-    '※ページヘッダーへの入力は不要です。',
-    ui.ButtonSet.OK
-  );
-}
-
-// ===== 公開 =====
+// ===== 公開ダイアログを表示 =====
 function publishDocument() {
-  _publish();
-}
-
-// ===== メインの公開処理 =====
-function _publish() {
-  const ui  = DocumentApp.getUi();
-  const doc = DocumentApp.getActiveDocument();
+  const ui        = DocumentApp.getUi();
+  const doc       = DocumentApp.getActiveDocument();
+  const articleId = doc.getId();
   const title     = doc.getName();
-  const articleId = doc.getId();  // ドキュメント固有 ID を記事 ID として使用
 
-  // 公開日をダイアログで入力（既存ファイルがあれば現在の公開日を事前取得）
+  // GitHub に既存ファイルがあるか確認し、あれば現在の公開日を初期値に使う
   const existingFile = findGitHubFileById(articleId);
   let defaultDate;
   if (existingFile) {
-    // 既存ファイル名から公開日を抽出（yyyy-mm-dd-{id}.md）
     const m = existingFile.path.match(/(\d{4}-\d{2}-\d{2})-/);
     defaultDate = m ? m[1] : Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd');
   } else {
     defaultDate = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd');
   }
 
-  const response = ui.prompt(
-    '公開日を入力してください',
-    'YYYY-MM-DD 形式で入力してください（例: ' + defaultDate + '）',
-    ui.ButtonSet.OK_CANCEL
+  const isNew      = !existingFile;
+  const existingPath = existingFile ? existingFile.path : '';
+  const existingSha  = existingFile ? existingFile.sha  : '';
+
+  // ──────────────────────────────────────────────
+  // HTML ダイアログ（3画面構成）
+  //   画面1: 公開日入力（本日日付を初期値としてフィールドに入力済み）
+  //   画面2: 確認（タイトル・公開日を表示して「公開する」）
+  //   画面3: 処理中 → 完了 or エラー
+  // ──────────────────────────────────────────────
+  const opLabel = isNew ? '新規公開' : '上書き更新';
+
+  const html =
+    '<style>' +
+    'body{font-family:sans-serif;padding:16px;margin:0;font-size:14px;line-height:1.5;}' +
+    'p{margin:0 0 8px;}' +
+    '.btn{padding:6px 20px;font-size:14px;cursor:pointer;border-radius:4px;border:none;}' +
+    '.primary{background:#1a73e8;color:#fff;}' +
+    '.secondary{background:#fff;border:1px solid #999;color:#333;}' +
+    'input[type=date]{font-size:15px;padding:4px 8px;border:1px solid #ccc;border-radius:4px;width:160px;}' +
+    '#s2,#s3{display:none;}' +
+    'table{border-collapse:collapse;width:100%;}' +
+    'td{padding:3px 6px;font-size:13px;}' +
+    'td:first-child{color:#666;white-space:nowrap;}' +
+    '</style>' +
+
+    // ── 画面1: 日付入力 ──
+    '<div id="s1">' +
+    '<p><b>【' + opLabel + '】</b>' + escapeHtml(title) + '</p>' +
+    '<p>公開日：</p>' +
+    '<input id="d" type="date" value="' + defaultDate + '">' +
+    '<p id="err" style="color:red;display:none;margin-top:6px;">YYYY-MM-DD 形式で入力してください</p>' +
+    '<div style="margin-top:16px;">' +
+    '<button class="btn primary" onclick="toConfirm()">次へ</button>' +
+    '<button class="btn secondary" onclick="google.script.host.close()" style="margin-left:8px;">キャンセル</button>' +
+    '</div></div>' +
+
+    // ── 画面2: 確認 ──
+    '<div id="s2">' +
+    '<p>以下の内容で公開します。よろしいですか？</p>' +
+    '<table><tr><td>操作</td><td><b>' + opLabel + '</b></td></tr>' +
+    '<tr><td>タイトル</td><td id="c-title"></td></tr>' +
+    '<tr><td>公開日</td><td id="c-date"></td></tr></table>' +
+    '<p style="margin-top:8px;font-size:12px;color:#666;">画像は Google ドライブに自動保存されます。<br>公開後は数分でサイトに反映されます。</p>' +
+    '<div style="margin-top:12px;">' +
+    '<button class="btn primary" onclick="doPublish()">公開する</button>' +
+    '<button class="btn secondary" onclick="back()" style="margin-left:8px;">戻る</button>' +
+    '</div></div>' +
+
+    // ── 画面3: 処理中 / 完了 / エラー ──
+    '<div id="s3">' +
+    '<p id="s3-msg">処理中…しばらくお待ちください。</p>' +
+    '<button id="s3-btn" class="btn primary" style="display:none;" onclick="google.script.host.close()">閉じる</button>' +
+    '</div>' +
+
+    // ── JavaScript ──
+    '<script>' +
+    'var sel;' +
+    'var title=' + JSON.stringify(title) + ';' +
+    'var ePath=' + JSON.stringify(existingPath) + ';' +
+    'var eSha='  + JSON.stringify(existingSha)  + ';' +
+
+    // 画面1→2: バリデーション
+    'function toConfirm(){' +
+    '  var v=document.getElementById("d").value;' +
+    '  if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(v)){' +
+    '    document.getElementById("err").style.display="block";return;' +
+    '  }' +
+    '  document.getElementById("err").style.display="none";' +
+    '  sel=v;' +
+    '  document.getElementById("c-title").textContent=title;' +
+    '  document.getElementById("c-date").textContent=v;' +
+    '  document.getElementById("s1").style.display="none";' +
+    '  document.getElementById("s2").style.display="block";' +
+    '}' +
+
+    // 画面2→1: 戻る
+    'function back(){' +
+    '  document.getElementById("s2").style.display="none";' +
+    '  document.getElementById("s1").style.display="block";' +
+    '}' +
+
+    // 画面2→3: 公開実行
+    'function doPublish(){' +
+    '  document.getElementById("s2").style.display="none";' +
+    '  document.getElementById("s3").style.display="block";' +
+    '  google.script.run' +
+    '    .withSuccessHandler(function(msg){' +
+    '      document.getElementById("s3-msg").textContent=msg;' +
+    '      document.getElementById("s3-btn").style.display="inline-block";' +
+    '    })' +
+    '    .withFailureHandler(function(e){' +
+    '      document.getElementById("s3-msg").textContent="エラーが発生しました:\\n"+e.message;' +
+    '      document.getElementById("s3-btn").style.display="inline-block";' +
+    '    })' +
+    '    .continuePublish(sel,ePath,eSha);' +
+    '}' +
+    '<\/script>';
+
+  ui.showModalDialog(
+    HtmlService.createHtmlOutput(html).setWidth(400).setHeight(260),
+    '記事を公開する'
   );
-  if (response.getSelectedButton() !== ui.Button.OK) {
-    ui.alert('キャンセルしました。');
-    return;
+}
+
+// ===== 公開の実際の処理（HTML ダイアログから google.script.run で呼ばれる） =====
+function continuePublish(publishDate, existingPath, existingSha) {
+  const doc       = DocumentApp.getActiveDocument();
+  const title     = doc.getName();
+  const articleId = doc.getId();
+
+  const existingFile = existingPath ? { path: existingPath, sha: existingSha } : null;
+  const isNew        = !existingFile;
+  const filename     = publishDate + '-' + articleId + '.md';
+  const filepath     = '_posts/' + filename;
+
+  // 更新の場合：旧画像を削除してから Markdown 変換（新画像を保存）
+  if (!isNew) {
+    clearDriveFolder(articleId);
   }
 
-  const publishDate = response.getResponseText().trim();
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(publishDate)) {
-    ui.alert('エラー', '公開日の形式が正しくありません。YYYY-MM-DD で入力してください（例: 2026-01-22）。', ui.ButtonSet.OK);
-    return;
+  // Markdown 変換（画像は新しく Drive に保存される）
+  const markdown = convertDocToMarkdown(doc, title, publishDate, articleId);
+
+  // 更新の場合：公開日が変わった旧ファイルを削除
+  if (!isNew && existingFile.path !== filepath) {
+    deleteFromGitHub(existingFile.path, existingFile.sha, '旧記事ファイルを削除: ' + title);
   }
 
-  const isNew    = !existingFile;
-  const filename = publishDate + '-' + articleId + '.md';
-  const filepath = '_posts/' + filename;
+  // GitHub に push
+  pushToGitHub(filepath, markdown, (isNew ? '記事を公開: ' : '記事を更新: ') + title);
 
-  // 確認ダイアログ
-  const confirmMsg =
-    (isNew ? '【新規公開】' : '【上書き更新】') + '\n\n' +
-    'タイトル: ' + title + '\n' +
-    '公開日: ' + publishDate + '\n\n' +
-    '※ドキュメント内の画像は Google ドライブに自動保存されます。\n' +
-    '※公開後は数分でサイトに反映されます。';
-
-  const result = ui.alert('公開確認', confirmMsg, ui.ButtonSet.YES_NO);
-  if (result !== ui.Button.YES) {
-    ui.alert('キャンセルしました。');
-    return;
-  }
-
-  try {
-    // 更新の場合：旧画像を削除してから Markdown 変換（新画像を保存）
-    if (!isNew) {
-      clearDriveFolder(articleId);
-    }
-
-    // Markdown 変換（画像は新しく Drive に保存される）
-    const markdown = convertDocToMarkdown(doc, title, publishDate, articleId);
-
-    // 更新の場合：公開日が変わった旧ファイルを削除
-    if (!isNew && existingFile.path !== filepath) {
-      deleteFromGitHub(existingFile.path, existingFile.sha, '旧記事ファイルを削除: ' + title);
-    }
-
-    // GitHub に push
-    pushToGitHub(filepath, markdown, (isNew ? '記事を公開: ' : '記事を更新: ') + title);
-
-    ui.alert(
-      '公開完了',
-      '「' + title + '」を' + (isNew ? '公開' : '更新') + 'しました！\n' +
-      '数分後にサイトに反映されます。\n\nファイル: ' + filename,
-      ui.ButtonSet.OK
-    );
-  } catch (e) {
-    ui.alert('エラー', '公開に失敗しました。\n\nエラー内容:\n' + e.message, ui.ButtonSet.OK);
-    console.error(e);
-  }
+  return '「' + title + '」を' + (isNew ? '公開' : '更新') + 'しました！\n' +
+         '数分後にサイトに反映されます。\n\nファイル: ' + filename;
 }
 
 // ===== 記事の削除 =====
 function deleteArticle() {
-  const ui  = DocumentApp.getUi();
-  const doc = DocumentApp.getActiveDocument();
-  const articleId = doc.getId();  // ドキュメント固有 ID を使用
+  const ui        = DocumentApp.getUi();
+  const doc       = DocumentApp.getActiveDocument();
+  const articleId = doc.getId();
 
   // GitHub に公開済みか確認
   const existingFile = findGitHubFileById(articleId);
@@ -173,6 +216,14 @@ function deleteArticle() {
   } catch (e) {
     ui.alert('エラー', '削除中にエラーが発生しました。\n\n' + e.message, ui.ButtonSet.OK);
   }
+}
+
+// ===== HTML 用エスケープ =====
+function escapeHtml(str) {
+  return str.replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
 }
 
 // ===== GitHub の _posts/ を ID で検索してファイル情報を返す =====
