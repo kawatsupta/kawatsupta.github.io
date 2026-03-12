@@ -18,29 +18,19 @@
  * （空行）
  * ここから本文...
  *
- * 【初期設定（アドオン管理者のみ・1回だけ）】
- * GAS エディタの「プロジェクトの設定」→「スクリプトプロパティ」に以下を追加:
- * GITHUB_TOKEN  : GitHub Fine-grained Personal Access Token (Contents: Read and Write)
- * GITHUB_OWNER  : GitHub アカウント名 (例: n-nishizaki)
- * GITHUB_REPO   : リポジトリ名 (例: kawatsu-pta-web)
+ * 【初期設定】
+ * config.gs に GITHUB_TOKEN / GITHUB_OWNER / GITHUB_REPO を入力してください。
+ * config.gs は .gitignore で管理対象外になっています。
  */
 
-// ===== メニューを追加（アドオン版） =====
-function onOpen(e) {
-  var menu = DocumentApp.getUi().createAddonMenu();
-  if (e && e.authMode === ScriptApp.AuthMode.NONE) {
-    menu.addItem('有効にする', 'onInstall');
-  } else {
-    menu
-      .addItem('新規記事テンプレートを作成', 'createNewArticle')
-      .addSeparator()
-      .addItem('このドキュメントを公開する', 'publishDocument');
-  }
-  menu.addToUi();
-}
-
-function onInstall(e) {
-  onOpen(e);
+// ===== メニューを追加 =====
+function onOpen() {
+  DocumentApp.getUi()
+    .createMenu('PTA公開')
+    .addItem('新規記事テンプレートを作成', 'createNewArticle')
+    .addSeparator()
+    .addItem('このドキュメントを公開する', 'publishDocument')
+    .addToUi();
 }
 
 // ===== 新規記事テンプレートを作成 =====
@@ -358,24 +348,18 @@ function getMimeExtension(mimeType) {
 
 // ===== GitHub API でファイルを作成・更新 =====
 function pushToGitHub(filepath, content, commitMessage) {
-  const props = PropertiesService.getScriptProperties();
-  const owner = props.getProperty('GITHUB_OWNER');
-  const repo  = props.getProperty('GITHUB_REPO');
-  const token = props.getProperty('GITHUB_TOKEN');
-
-  if (!owner || !repo || !token) {
+  if (!GITHUB_TOKEN || !GITHUB_OWNER || !GITHUB_REPO) {
     throw new Error(
-      'スクリプトプロパティが設定されていません。\n' +
-      'GAS エディタの「プロジェクトの設定」→「スクリプトプロパティ」に\n' +
-      'GITHUB_TOKEN / GITHUB_OWNER / GITHUB_REPO を追加してください。'
+      'config.gs の設定が不完全です。\n' +
+      'GITHUB_TOKEN / GITHUB_OWNER / GITHUB_REPO を入力してください。'
     );
   }
 
-  const apiUrl = 'https://api.github.com/repos/' + owner + '/' + repo + '/contents/' + filepath;
+  const apiUrl = 'https://api.github.com/repos/' + GITHUB_OWNER + '/' + GITHUB_REPO + '/contents/' + filepath;
 
   let sha;
   const getRes = UrlFetchApp.fetch(apiUrl, {
-    headers: { 'Authorization': 'token ' + token },
+    headers: { 'Authorization': 'token ' + GITHUB_TOKEN },
     muteHttpExceptions: true
   });
   if (getRes.getResponseCode() === 200) {
@@ -385,14 +369,14 @@ function pushToGitHub(filepath, content, commitMessage) {
   const payload = {
     message: commitMessage,
     content: Utilities.base64Encode(content, Utilities.Charset.UTF_8),
-    branch: 'main'
+    branch: GITHUB_BRANCH
   };
   if (sha) payload.sha = sha;
 
   const putRes = UrlFetchApp.fetch(apiUrl, {
     method: 'put',
     headers: {
-      'Authorization': 'token ' + token,
+      'Authorization': 'token ' + GITHUB_TOKEN,
       'Content-Type': 'application/json'
     },
     payload: JSON.stringify(payload),
