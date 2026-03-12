@@ -176,7 +176,7 @@ function continuePublish(publishDate, existingPath, existingSha) {
   pushToGitHub(filepath, markdown, (isNew ? '記事を公開: ' : '記事を更新: ') + title);
 
   return '「' + title + '」を' + (isNew ? '公開' : '更新') + 'しました！\n' +
-         '数分後にサイトに反映されます。\n\nファイル: ' + filename;
+         '数分後にサイトに反映されます。';
 }
 
 // ===== 記事の削除 =====
