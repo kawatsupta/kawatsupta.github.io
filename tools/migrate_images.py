@@ -202,6 +202,74 @@ def github_push(path, content_bytes, message):
     return put_r.status_code in (200, 201)
 
 
+def github_batch_push(files_dict, message):
+    """
+    複数ファイルを1コミットで push する（Git Trees API）。
+    files_dict: { 'repo内パス': bytes, ... }
+    デプロイトリガーは ref 更新の1回のみ。失敗時は例外を送出。
+    """
+    base = (f'https://api.github.com/repos/{config.GITHUB_OWNER}'
+            f'/{config.GITHUB_REPO}/git')
+
+    # ① 現在の HEAD SHA を取得
+    r = requests.get(f'{base}/ref/heads/{config.GITHUB_BRANCH}',
+                     headers=_headers(), timeout=15)
+    r.raise_for_status()
+    head_sha = r.json()['object']['sha']
+
+    # ② base tree SHA を取得
+    r = requests.get(f'{base}/commits/{head_sha}',
+                     headers=_headers(), timeout=15)
+    r.raise_for_status()
+    base_tree_sha = r.json()['tree']['sha']
+
+    # ③ 各ファイルをブロブとしてアップロード
+    tree_items = []
+    for path, content_bytes in files_dict.items():
+        r = requests.post(
+            f'{base}/blobs', headers=_headers(),
+            json={
+                'content':  base64.b64encode(content_bytes).decode('ascii'),
+                'encoding': 'base64',
+            },
+            timeout=30,
+        )
+        r.raise_for_status()
+        tree_items.append({
+            'path': path, 'mode': '100644',
+            'type': 'blob', 'sha': r.json()['sha'],
+        })
+        time.sleep(GITHUB_SLEEP)
+
+    # ④ ツリー作成
+    r = requests.post(
+        f'{base}/trees', headers=_headers(),
+        json={'base_tree': base_tree_sha, 'tree': tree_items},
+        timeout=30,
+    )
+    r.raise_for_status()
+    new_tree_sha = r.json()['sha']
+
+    # ⑤ コミット作成
+    r = requests.post(
+        f'{base}/commits', headers=_headers(),
+        json={'message': message, 'tree': new_tree_sha, 'parents': [head_sha]},
+        timeout=30,
+    )
+    r.raise_for_status()
+    new_commit_sha = r.json()['sha']
+
+    # ⑥ ブランチ更新（← ここだけがデプロイのトリガー）
+    r = requests.patch(
+        f'{base}/refs/heads/{config.GITHUB_BRANCH}',
+        headers=_headers(),
+        json={'sha': new_commit_sha},
+        timeout=15,
+    )
+    r.raise_for_status()
+    time.sleep(GITHUB_SLEEP)
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # 記事一覧取得
 # ──────────────────────────────────────────────────────────────────────────────
@@ -265,6 +333,9 @@ def process_post(file_info, dry_run=False):
     first_date_raw = matches[0][1]
     saved = set() if dry_run else get_saved_images(first_date_raw)
 
+    # 今回 push すべき新規ファイルを集める { repo内パス: bytes }
+    push_files = {}
+
     for filename, date_raw in matches:
         old_url = OLD_BASE + filename
 
@@ -303,35 +374,43 @@ def process_post(file_info, dry_run=False):
             compressed_bytes = original_bytes
             new_filename     = filename
 
-        # ── c. GitHub に push ──
+        # ── c. push 予定リストに追加（まだ送信しない） ──
         asset_path = f'{IMAGE_DIR}/{date_raw}/{new_filename}'
         new_url    = f'{config.PAGES_BASE_URL}/{asset_path}'
-
-        ok = github_push(asset_path, compressed_bytes, f'[migrate-img] {new_filename}')
-        if not ok:
-            print(f'      ✗ push失敗: {new_filename}')
-            fail_count += 1
-            continue
-
-        time.sleep(GITHUB_SLEEP)
+        push_files[asset_path] = compressed_bytes
 
         # ── d. MD 内 URL 差し替え ──
         new_content = new_content.replace(OLD_BASE + filename, new_url)
         ok_count += 1
 
-    # ── e. MD ファイルを更新 ──
-    if ok_count > 0 and new_content != content:
-        ok = github_push(
-            file_info['path'],
-            new_content.encode('utf-8'),
-            f'[migrate-img] URL差し替え: {file_info["name"]}'
-        )
-        if not ok:
-            print(f'      ✗ MD更新失敗: {file_info["name"]}')
-            fail_count += ok_count
-            ok_count = 0
+    # ── e. 画像 + MD を1コミットで push（デプロイは記事1件につき1回）──
+    if new_content != content:
+        if push_files:
+            # 新規画像あり → 画像 + MD を一括 push（Git Trees API）
+            push_files[file_info['path']] = new_content.encode('utf-8')
+            n_imgs = len(push_files) - 1
+            try:
+                github_batch_push(
+                    push_files,
+                    f'[migrate-img] {file_info["name"]} ({n_imgs}枚)'
+                )
+            except Exception as e:
+                print(f'      ✗ batch push 失敗: {e}')
+                fail_count += ok_count
+                ok_count = 0
         else:
-            time.sleep(GITHUB_SLEEP)
+            # 全画像スキップ済み → MD のみ push（通常の Contents API）
+            ok = github_push(
+                file_info['path'],
+                new_content.encode('utf-8'),
+                f'[migrate-img] URL差し替え: {file_info["name"]}'
+            )
+            if not ok:
+                print(f'      ✗ MD更新失敗: {file_info["name"]}')
+                fail_count += ok_count
+                ok_count = 0
+            else:
+                time.sleep(GITHUB_SLEEP)
 
     return ok_count, fail_count
 
