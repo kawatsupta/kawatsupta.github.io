@@ -27,6 +27,7 @@ Markdown 内の URL を GitHub Pages の URL に差し替える。
 
 import io
 import re
+import sys
 import time
 import base64
 import argparse
@@ -35,15 +36,23 @@ from PIL import Image
 
 import config
 
+# 起動時に必須設定の存在を確認
+for _attr in ('GITHUB_TOKEN', 'GITHUB_OWNER', 'GITHUB_REPO', 'GITHUB_BRANCH', 'PAGES_BASE_URL'):
+    if not hasattr(config, _attr):
+        print(f'エラー: config.py に {_attr} が設定されていません。')
+        sys.exit(1)
+
 # ──────────────────────────────────────────────────────────────────────────────
 # 定数
 # ──────────────────────────────────────────────────────────────────────────────
 
-OLD_BASE    = 'http://kawatsupta.byonia.net/report/'
-IMAGE_DIR   = 'assets/images/migrated'   # GitHub リポジトリ内のパス
-SLEEP_SEC   = 1.0                         # GitHub API レート制限対策
-MAX_PX      = 1200                        # 長辺の最大ピクセル数
-JPEG_Q      = 80                          # JPEG 圧縮品質
+OLD_BASE       = 'http://kawatsupta.byonia.net/report/'
+IMAGE_DIR      = 'assets/images/migrated'   # GitHub リポジトリ内のパス
+GITHUB_SLEEP   = 1.0                        # GitHub API call 後のスリープ（秒）
+DOWNLOAD_SLEEP = 1.5                        # 旧サーバ画像 DL 後のスリープ（秒）
+RETRY_WAITS    = [10, 30]                   # 503 時のリトライ待機秒数（リトライ回数 = len+1）
+MAX_PX         = 1200                       # 長辺の最大ピクセル数
+JPEG_Q         = 80                         # JPEG 圧縮品質
 
 # 旧サーバ画像URL のパターン
 # キャプチャ: (filename, date_raw)  例: ('20250925_1.jpg', '20250925')
@@ -106,6 +115,37 @@ def compress_image(img_bytes, original_filename):
         new_filename = stem + '.jpg'      # 拡張子を .jpg に統一
 
     return buf.getvalue(), new_filename
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 旧サーバからのダウンロード（retry 付き）
+# ──────────────────────────────────────────────────────────────────────────────
+
+def download_image(url):
+    """
+    旧サーバから画像をダウンロードする。
+    503（レートリミット）は RETRY_WAITS に従ってリトライ。
+    成功時: bytes / 失敗時: None
+    """
+    for attempt, wait in enumerate([0] + RETRY_WAITS):
+        if wait:
+            print(f'      ⚠ 503 レートリミット。{wait}秒後にリトライ ({attempt}/{len(RETRY_WAITS)+1})…')
+            time.sleep(wait)
+        try:
+            resp = requests.get(url, timeout=20)
+        except Exception as e:
+            print(f'      ✗ DL例外: {e}')
+            return None
+        if resp.status_code == 200:
+            time.sleep(DOWNLOAD_SLEEP)  # 旧サーバへの負荷軽減
+            return resp.content
+        if resp.status_code != 503:
+            print(f'      ✗ DL失敗: HTTP {resp.status_code}')
+            return None
+        # 503 → ループの次のリトライへ
+
+    print(f'      ✗ リトライ上限到達: {url}')
+    return None
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -217,15 +257,8 @@ def process_post(file_info, dry_run=False):
             continue
 
         # ── a. 旧サーバからダウンロード ──
-        try:
-            img_resp = requests.get(old_url, timeout=20)
-            if img_resp.status_code != 200:
-                print(f'      ✗ DL失敗: {filename} (HTTP {img_resp.status_code})')
-                fail_count += 1
-                continue
-            original_bytes = img_resp.content
-        except Exception as e:
-            print(f'      ✗ DL例外: {filename}: {e}')
+        original_bytes = download_image(old_url)
+        if original_bytes is None:
             fail_count += 1
             continue
 
@@ -269,7 +302,7 @@ def process_post(file_info, dry_run=False):
             fail_count += ok_count
             ok_count = 0
         else:
-            time.sleep(SLEEP_SEC)
+            time.sleep(GITHUB_SLEEP)
 
     return ok_count, fail_count
 
