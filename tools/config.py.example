@@ -1,0 +1,8 @@
+# GitHub 設定
+# このファイルを config.py にコピーして値を入力してください
+# ※ config.py は .gitignore に含まれています（トークンを公開しないため）
+
+GITHUB_TOKEN  = 'ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
+GITHUB_OWNER  = 'your-github-username'
+GITHUB_REPO   = 'PTA-web'
+GITHUB_BRANCH = 'main'

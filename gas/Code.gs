@@ -247,6 +247,9 @@ function cleanupOrphanedArticles() {
     if (!m) continue;
     const docId = m[1];
 
+    // 移行済み記事（migrated- プレフィックス）は Google Doc が存在しないので除外
+    if (docId.indexOf('migrated-') === 0) continue;
+
     // Doc が存在するか確認
     // ・DriveApp.getFileById() が例外 → 完全に削除済み
     // ・取得できても isTrashed() が true  → ゴミ箱入り
