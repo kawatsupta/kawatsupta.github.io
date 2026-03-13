@@ -11,6 +11,7 @@ page_title: 松江市立川津小学校 PTA ホームページ
 <div id="main">
 
   <div class="section-title">| 更新情報</div>
+  <div class="news-list-wrapper">
   <ul class="news-list">
     {% assign two_weeks_ago = 'now' | date: '%s' | minus: 1209600 %}
     {% for post in site.posts limit:20 %}
@@ -27,6 +28,7 @@ page_title: 松江市立川津小学校 PTA ホームページ
     <li style="padding:12px 14px; color:#999;">まだ記事がありません。</li>
     {% endif %}
   </ul>
+  </div>
 
   <div class="greeting-box">
     <div class="section-title">| ご挨拶</div>

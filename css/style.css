@@ -121,10 +121,15 @@ a:hover {
 }
 
 /* ===== 更新情報リスト ===== */
+.news-list-wrapper {
+  /* li 1行 ≈ padding(8+8) + line-height(20px) + border(1px) ≈ 37px → 3行分 */
+  max-height: calc(3 * (8px + 1.5em + 8px + 1px));
+  overflow-y: auto;
+  border: 1px solid #ddd;
+}
 .news-list {
   list-style: none;
   background: white;
-  border: 1px solid #ddd;
 }
 .news-list li {
   padding: 8px 14px;
