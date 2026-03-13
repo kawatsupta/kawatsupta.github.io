@@ -9,8 +9,9 @@ Markdown 内の URL を GitHub Pages の URL に差し替える。
   3. 旧サーバ画像URL（http://kawatsupta.byonia.net/report/...）を抽出
   4. 画像ごとに:
        a. 旧サーバからダウンロード
-       b. GitHub の assets/images/migrated/{YYYYMMDD}/ に push
-       c. MD 内の URL を GitHub Pages URL に置換
+       b. 圧縮（長辺1200px以内 / JPEG品質80%）
+       c. GitHub の assets/images/migrated/{YYYYMMDD}/ に push
+       d. MD 内の URL を GitHub Pages URL に置換
   5. 更新後の MD を GitHub に push
 
 【使い方】
@@ -24,11 +25,13 @@ Markdown 内の URL を GitHub Pages の URL に差し替える。
   例: PAGES_BASE_URL = 'https://yourname.github.io/kawatsu-pta-web'
 """
 
+import io
 import re
 import time
 import base64
 import argparse
 import requests
+from PIL import Image
 
 import config
 
@@ -39,6 +42,8 @@ import config
 OLD_BASE    = 'http://kawatsupta.byonia.net/report/'
 IMAGE_DIR   = 'assets/images/migrated'   # GitHub リポジトリ内のパス
 SLEEP_SEC   = 1.0                         # GitHub API レート制限対策
+MAX_PX      = 1200                        # 長辺の最大ピクセル数
+JPEG_Q      = 80                          # JPEG 圧縮品質
 
 # 旧サーバ画像URL のパターン
 # キャプチャ: (filename, date_raw)  例: ('20250925_1.jpg', '20250925')
@@ -46,6 +51,61 @@ OLD_IMG_RE = re.compile(
     r'http://kawatsupta\.byonia\.net/report/((\d{8})[^)\s"\']+\.(?:jpe?g|png|gif|webp))',
     re.IGNORECASE
 )
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 画像圧縮
+# ──────────────────────────────────────────────────────────────────────────────
+
+def compress_image(img_bytes, original_filename):
+    """
+    画像を圧縮して (compressed_bytes, new_filename) を返す。
+
+    変換ルール:
+      JPEG/WebP       → JPEG(品質80%) にリサイズ
+      PNG（透過なし） → JPEG(品質80%) に変換してリサイズ
+      PNG（透過あり） → PNG のまま最適化リサイズ
+      GIF             → そのまま（アニメーション対応）
+    """
+    ext = original_filename.rsplit('.', 1)[-1].lower()
+
+    # GIF はそのまま返す
+    if ext == 'gif':
+        return img_bytes, original_filename
+
+    img = Image.open(io.BytesIO(img_bytes))
+
+    # 長辺を MAX_PX 以内にリサイズ
+    w, h = img.size
+    if max(w, h) > MAX_PX:
+        if w >= h:
+            new_size = (MAX_PX, max(1, int(h * MAX_PX / w)))
+        else:
+            new_size = (max(1, int(w * MAX_PX / h)), MAX_PX)
+        img = img.resize(new_size, Image.LANCZOS)
+
+    # 透過チャンネルの有無を確認
+    has_alpha = img.mode in ('RGBA', 'LA') or (
+        img.mode == 'P' and 'transparency' in img.info
+    )
+
+    buf = io.BytesIO()
+
+    if has_alpha:
+        # 透過PNG → PNG のまま圧縮
+        if img.mode not in ('RGBA', 'LA'):
+            img = img.convert('RGBA')
+        img.save(buf, format='PNG', optimize=True)
+        new_filename = original_filename  # 拡張子変わらず
+    else:
+        # それ以外 → JPEG に変換
+        if img.mode not in ('RGB', 'L'):
+            img = img.convert('RGB')
+        img.save(buf, format='JPEG', quality=JPEG_Q, optimize=True)
+        stem         = original_filename.rsplit('.', 1)[0]
+        new_filename = stem + '.jpg'      # 拡張子を .jpg に統一
+
+    return buf.getvalue(), new_filename
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -78,14 +138,11 @@ def github_get_file(path):
     return content, data['sha']
 
 
-def github_push(path, content_bytes, message, dry_run=False):
+def github_push(path, content_bytes, message):
     """
     バイナリ or テキスト (bytes) を GitHub に push する。
     既存ファイルがあれば上書き。成功時 True。
     """
-    if dry_run:
-        return True
-
     url = _api(path)
 
     # 既存 sha 取得（上書き更新に必要）
@@ -132,9 +189,9 @@ def get_migrated_posts():
 def process_post(file_info, dry_run=False):
     """
     1記事分の画像移行を実行する。
-    返り値: (成功件数, スキップ件数, 失敗件数)
+    返り値: (成功件数, 失敗件数)
     """
-    content, sha = github_get_file(file_info['path'])
+    content, _sha = github_get_file(file_info['path'])
 
     # 旧サーバ画像URL を全て抽出（重複除去・順序保持）
     seen, matches = set(), []
@@ -145,63 +202,76 @@ def process_post(file_info, dry_run=False):
             matches.append((filename, date_raw))
 
     if not matches:
-        return 0, 0, 0  # 移行済みまたは画像なし
+        return 0, 0  # 移行済みまたは画像なし
 
     ok_count = fail_count = 0
     new_content = content
 
     for filename, date_raw in matches:
-        old_url    = OLD_BASE + filename
-        asset_path = f'{IMAGE_DIR}/{date_raw}/{filename}'
+        old_url = OLD_BASE + filename
+
+        if dry_run:
+            # ドライランは URL の確認のみ
+            print(f'      → {filename}')
+            ok_count += 1
+            continue
+
+        # ── a. 旧サーバからダウンロード ──
+        try:
+            img_resp = requests.get(old_url, timeout=20)
+            if img_resp.status_code != 200:
+                print(f'      ✗ DL失敗: {filename} (HTTP {img_resp.status_code})')
+                fail_count += 1
+                continue
+            original_bytes = img_resp.content
+        except Exception as e:
+            print(f'      ✗ DL例外: {filename}: {e}')
+            fail_count += 1
+            continue
+
+        # ── b. 圧縮 ──
+        try:
+            compressed_bytes, new_filename = compress_image(original_bytes, filename)
+            ratio = len(compressed_bytes) / len(original_bytes) * 100
+            size_kb = len(compressed_bytes) // 1024
+            print(f'      {filename} → {new_filename}  '
+                  f'{len(original_bytes)//1024}KB → {size_kb}KB ({ratio:.0f}%)')
+        except Exception as e:
+            print(f'      ✗ 圧縮失敗: {filename}: {e}  （元データをそのまま使用）')
+            compressed_bytes = original_bytes
+            new_filename     = filename
+
+        # ── c. GitHub に push ──
+        asset_path = f'{IMAGE_DIR}/{date_raw}/{new_filename}'
         new_url    = f'{config.PAGES_BASE_URL}/{asset_path}'
 
-        if not dry_run:
-            # ── a. 旧サーバからダウンロード ──
-            try:
-                img_resp = requests.get(old_url, timeout=20)
-                if img_resp.status_code != 200:
-                    print(f'      ✗ DL失敗: {filename} (HTTP {img_resp.status_code})')
-                    fail_count += 1
-                    continue
-                img_bytes = img_resp.content
-            except Exception as e:
-                print(f'      ✗ DL例外: {filename}: {e}')
-                fail_count += 1
-                continue
+        ok = github_push(asset_path, compressed_bytes, f'[migrate-img] {new_filename}')
+        if not ok:
+            print(f'      ✗ push失敗: {new_filename}')
+            fail_count += 1
+            continue
 
-            # ── b. GitHub に push ──
-            ok = github_push(
-                asset_path, img_bytes,
-                f'[migrate-img] {filename}'
-            )
-            if not ok:
-                print(f'      ✗ push失敗: {filename}')
-                fail_count += 1
-                continue
+        time.sleep(SLEEP_SEC)
 
-            time.sleep(SLEEP_SEC)
-
-        # ── c. URL 差し替え ──
+        # ── d. MD 内 URL 差し替え ──
         new_content = new_content.replace(OLD_BASE + filename, new_url)
         ok_count += 1
 
-    # ── d. MD ファイルを更新 ──
+    # ── e. MD ファイルを更新 ──
     if ok_count > 0 and new_content != content:
-        if not dry_run:
-            ok = github_push(
-                file_info['path'],
-                new_content.encode('utf-8'),
-                f'[migrate-img] URL差し替え: {file_info["name"]}',
-                dry_run=False
-            )
-            if not ok:
-                print(f'      ✗ MD更新失敗: {file_info["name"]}')
-                fail_count += ok_count
-                ok_count = 0
-            else:
-                time.sleep(SLEEP_SEC)
+        ok = github_push(
+            file_info['path'],
+            new_content.encode('utf-8'),
+            f'[migrate-img] URL差し替え: {file_info["name"]}'
+        )
+        if not ok:
+            print(f'      ✗ MD更新失敗: {file_info["name"]}')
+            fail_count += ok_count
+            ok_count = 0
+        else:
+            time.sleep(SLEEP_SEC)
 
-    return ok_count, 0, fail_count
+    return ok_count, fail_count
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -214,7 +284,7 @@ def main():
     )
     parser.add_argument(
         '--dry-run', action='store_true',
-        help='URL抽出の確認のみ（ダウンロード・push はしない）'
+        help='画像URLの確認のみ（ダウンロード・push はしない）'
     )
     parser.add_argument(
         '--from', dest='from_date', metavar='YYYYMMDD',
@@ -243,7 +313,9 @@ def main():
 
     print(f'{len(posts)} 件の記事を処理します')
     if args.dry_run:
-        print('[DRY RUN モード] ダウンロード・push はスキップします\n')
+        print('[DRY RUN モード] ダウンロード・圧縮・push はスキップします\n')
+    else:
+        print(f'圧縮設定: 長辺{MAX_PX}px以内 / JPEG品質{JPEG_Q}%\n')
 
     total_ok = total_fail = 0
 
@@ -253,12 +325,12 @@ def main():
         label    = f'[{i:3d}/{len(posts)}] {date_str}'
 
         try:
-            ok, skip, fail = process_post(post, dry_run=args.dry_run)
+            ok, fail = process_post(post, dry_run=args.dry_run)
             total_ok   += ok
             total_fail += fail
 
             if ok == 0 and fail == 0:
-                status = '対象なし'
+                status = '対象なし（移行済み）'
             elif fail > 0:
                 status = f'{ok} 枚 OK / {fail} 枚失敗'
             else:
