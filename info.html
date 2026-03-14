@@ -1,0 +1,31 @@
+---
+layout: default
+title: 役立ち情報
+---
+<div id="main">
+  <div class="section-title">| 役立ち情報</div>
+
+  <ul class="info-list">
+    {% for item in site.data.info.links %}
+    <li>
+      <a href="{{ item.url }}" target="_blank">
+        {{ item.name }}
+        {% if item.members_only %}<span class="badge-members">会員限定</span>{% endif %}
+        {% if item.desc %}<div class="desc">{{ item.desc }}</div>{% endif %}
+      </a>
+    </li>
+    {% endfor %}
+  </ul>
+
+  <div style="margin-top:24px;">
+    <div class="section-title">| リンク集</div>
+    <ul class="info-list">
+      {% for item in site.data.info.ext_links %}
+      <li>
+        <a href="{{ item.url }}" target="_blank">{{ item.name }}</a>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+
+</div>

@@ -1,0 +1,42 @@
+---
+layout: default
+title: ホーム
+page_title: 松江市立川津小学校 PTA ホームページ
+---
+<div id="hero">
+  <!-- 学校の写真に差し替えてください（setup.md 参照） -->
+  <img src="https://lh3.googleusercontent.com/d/1JlYTEgKf1KUUT-3CWYnKETTwSi0DD30E" alt="川津小学校" onerror="this.style.display='none'">
+</div>
+
+<div id="main">
+
+  <div class="section-title">| 更新情報</div>
+  <div class="news-list-wrapper">
+  <ul class="news-list">
+    {% assign two_weeks_ago = 'now' | date: '%s' | minus: 1209600 %}
+    {% for post in site.posts limit:20 %}
+    <li>
+      <span class="date">{{ post.date | date: "%Y-%m-%d" }}</span>
+      <span class="title">
+        <a href="{{ post.url | relative_url }}">{{ post.title }}</a>
+        {% assign post_ts = post.date | date: '%s' | plus: 0 %}
+        {% if post_ts > two_weeks_ago %}<span class="badge-new">NEW</span>{% endif %}
+      </span>
+    </li>
+    {% endfor %}
+    {% if site.posts.size == 0 %}
+    <li style="padding:12px 14px; color:#999;">まだ記事がありません。</li>
+    {% endif %}
+  </ul>
+  </div>
+
+  <div class="greeting-box">
+    <div class="section-title">| ご挨拶</div>
+    <div style="padding:16px; background:white; border:1px solid #ddd; margin-top:0;">
+      {% if site.data.greeting %}
+      <p>{{ site.data.greeting.text | newline_to_br }}</p>
+      {% endif %}
+    </div>
+  </div>
+
+</div>

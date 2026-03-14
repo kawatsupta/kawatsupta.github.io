@@ -1,0 +1,35 @@
+---
+layout: default
+title: お知らせ
+---
+<div id="main">
+  <div class="section-title">| お知らせ</div>
+  <p style="margin-bottom:16px; color:#555;">イベントレポートや諸連絡などをお知らせします。</p>
+
+  {% if site.posts.size == 0 %}
+  <p style="color:#999; padding:12px 0;">まだ記事がありません。</p>
+  {% else %}
+  {% assign posts_by_year = site.posts | group_by_exp: "post", "post.date | date: '%Y'" %}
+  {% for year_group in posts_by_year %}
+  <div class="year-group">
+    <h2>{{ year_group.name }}年</h2>
+    {% assign posts_by_month = year_group.items | group_by_exp: "post", "post.date | date: '%-m'" %}
+    {% for month_group in posts_by_month %}
+    <div class="month-group">
+      <div class="month-label">{{ month_group.name }}月</div>
+      <ul class="post-list">
+        {% for post in month_group.items %}
+        <li>
+          <span class="day">{{ post.date | date: "%-d日" }}</span>
+          <span class="title">
+            <a href="{{ post.url | relative_url }}">{{ post.title }}</a>
+          </span>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endfor %}
+  </div>
+  {% endfor %}
+  {% endif %}
+</div>
