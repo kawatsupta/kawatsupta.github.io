@@ -1,0 +1,13 @@
+# GitHub 設定
+# このファイルを config.py にコピーして値を入力してください
+# ※ config.py は .gitignore に含まれています（トークンを公開しないため）
+
+GITHUB_TOKEN  = 'ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
+GITHUB_OWNER  = 'your-github-username'
+GITHUB_REPO   = 'PTA-web'
+GITHUB_BRANCH = 'main'
+
+# GitHub Pages のベース URL（末尾スラッシュなし）
+# _config.yml の url + baseurl と一致させてください
+# 例: https://yourname.github.io/kawatsu-pta-web
+PAGES_BASE_URL = 'https://your-github-username.github.io/kawatsu-pta-web'

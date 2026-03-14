@@ -1,0 +1,86 @@
+---
+layout: default
+title: 会員専用ページ
+---
+<div id="main">
+  <div class="section-title" id="page-title">| 会員専用ページ</div>
+
+  <!-- 保存済みパスワードがある場合はログインフォームを描画前に非表示にする（フラッシュ防止） -->
+  <script>
+    if (localStorage.getItem('members_pw')) {
+      document.head.insertAdjacentHTML('beforeend',
+        '<style id="auto-login-style">#login-area{display:none}</style>');
+    }
+  </script>
+
+  <!-- ログインフォーム -->
+  <div id="login-area" style="max-width:360px; margin:32px auto; padding:24px; background:#fff; border:1px solid #ddd; border-radius:4px;">
+    <p style="margin-bottom:16px; font-size:0.95em; color:#555;">
+      このページは会員限定です。<br>配布済みのIDとパスワードを入力してください。
+    </p>
+    <div style="margin-bottom:12px;">
+      <label style="display:block; font-size:0.9em; margin-bottom:4px;">ユーザー名</label>
+      <input id="member-id" type="text" autocomplete="username"
+             style="width:100%; padding:8px; border:1px solid #ccc; border-radius:3px; font-size:1em; box-sizing:border-box;">
+    </div>
+    <div style="margin-bottom:16px;">
+      <label style="display:block; font-size:0.9em; margin-bottom:4px;">パスワード</label>
+      <input id="member-pw" type="password" autocomplete="current-password"
+             style="width:100%; padding:8px; border:1px solid #ccc; border-radius:3px; font-size:1em; box-sizing:border-box;">
+    </div>
+    <div id="login-error" style="display:none; color:#c00; font-size:0.9em; margin-bottom:12px;"></div>
+    <button id="login-btn" onclick="memberLogin()"
+            style="width:100%; padding:10px; background:#333; color:#fff; border:none; border-radius:3px; font-size:1em; cursor:pointer;">
+      ログイン
+    </button>
+  </div>
+
+  <!-- コンテンツエリア（ログイン後に表示） -->
+  <div id="members-content" style="display:none;">
+    <div style="text-align:right; margin-bottom:4px;">
+      <button onclick="memberLogout()"
+              style="font-size:0.8em; color:#888; background:none; border:1px solid #ccc; border-radius:3px; padding:3px 10px; cursor:pointer;">
+        ログアウト
+      </button>
+    </div>
+
+    <!-- スポ少情報 -->
+    <div id="section-sports" style="display:none;">
+      <div style="overflow-x:auto; margin-top:8px;">
+        <table id="sports-table" style="width:100%; border-collapse:collapse; font-size:0.95em;">
+          <thead>
+            <tr style="background:#333; color:#fff;">
+              <th style="padding:10px 8px; text-align:left; white-space:nowrap;">クラブ名</th>
+              <th style="padding:10px 8px; text-align:left;">活動時間</th>
+              <th style="padding:10px 8px; text-align:left; white-space:nowrap;">対象学年</th>
+              <th style="padding:10px 8px; text-align:left; white-space:nowrap;">連絡先</th>
+            </tr>
+          </thead>
+          <tbody id="sports-tbody">
+            <!-- JS で動的に生成 -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 広報誌バックナンバー -->
+    <div id="section-newsletter" style="display:none;">
+      <ul id="newsletter-list" class="info-list" style="margin-top:8px;">
+        <!-- JS で動的に生成 -->
+      </ul>
+    </div>
+
+    <!-- データ未設定時のメッセージ -->
+    <div id="section-empty" style="display:none; padding:24px; color:#888; text-align:center;">
+      コンテンツがまだ登録されていません。<br>
+      スプレッドシートから「会員限定ページを更新する」を実行してください。
+    </div>
+
+  </div>
+</div>
+
+<script>
+  // Jekyll の baseurl を JS に渡す
+  var MEMBERS_DATA_URL = "{{ '/data/members.json' | relative_url }}";
+</script>
+<script src="{{ '/js/members.js' | relative_url }}"></script>

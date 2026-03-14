@@ -1,0 +1,16 @@
+title: 川津小学校PTA
+description: 松江市立川津小学校ＰＴＡ ホームページ
+baseurl: "/kawatsu-pta-web"
+url: ""
+
+markdown: kramdown
+encoding: utf-8
+permalink: /posts/:year:month:day-:slug/
+
+exclude:
+  - gas/
+  - docs/
+  - Gemfile
+  - Gemfile.lock
+  - .claude/
+  - "*.sh"
