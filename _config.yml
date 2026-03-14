@@ -1,7 +1,7 @@
 title: 川津小学校PTA
 description: 松江市立川津小学校ＰＴＡ ホームページ
-baseurl: "/kawatsu-pta-web"
-url: ""
+baseurl: ""
+url: "https://kawatsupta.github.io"
 
 markdown: kramdown
 encoding: utf-8
