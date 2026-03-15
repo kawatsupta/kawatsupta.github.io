@@ -377,7 +377,7 @@ a:hover {
     gap: 2px;
   }
 
-  /* ヘッダー：写真全幅＋サイト名オーバーレイ */
+  /* ヘッダー：写真半幅＋サイト名オーバーレイ */
   #header {
     position: relative;
     height: 70px;
@@ -385,25 +385,26 @@ a:hover {
   #header .header-img {
     position: absolute;
     inset: 0;
-    width: 100%;
+    left: 50%;
+    width: 50%;
   }
   #header .header-left {
     position: relative;
     z-index: 1;
     padding: 0 14px;
-    flex: 1;
+    width: 50%;
     display: flex;
     align-items: center;
   }
   #header h1 {
     font-size: 17px;
     letter-spacing: 1px;
-    color: #fff;
-    text-shadow: 0 1px 4px rgba(0,0,0,0.6);
+    color: #333;
+    text-shadow: none;
     white-space: nowrap;
   }
   #header h1 a {
-    color: #fff;
+    color: #333;
   }
   #header .fb-link {
     display: none;
