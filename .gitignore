@@ -7,3 +7,5 @@ vendor/
 .DS_Store
 .claude/
 tools/config.py
+tools/newsletter_config.py
+tools/downloaded_newsletters/
