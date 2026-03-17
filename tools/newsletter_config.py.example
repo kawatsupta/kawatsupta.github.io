@@ -1,0 +1,14 @@
+# 広報誌移行ツール設定ファイル
+# このファイルを newsletter_config.py にコピーして値を入力してください
+# ※ newsletter_config.py は .gitignore に含まれています（パスワード保護のため）
+
+# 広報誌一覧ページのURL（旧サイトのURL）
+LIST_URL = 'http://kawatsupta.byonia.net/kouhoushi/'
+
+# HTTP Basic認証（旧サイトが認証なしの場合は空文字列のまま）
+AUTH_USER = 'PTA'
+AUTH_PASS = 'YOUR_PASSWORD'
+
+# ダウンロードしたPDFの保存先ディレクトリ（ローカル）
+# スクリプトからの相対パスまたは絶対パス
+OUTPUT_DIR = './downloaded_newsletters'
