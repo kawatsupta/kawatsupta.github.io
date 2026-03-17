@@ -339,6 +339,32 @@ a:hover {
   text-decoration: none;
 }
 
+/* ===== カレンダーページ ===== */
+.page-content {
+  max-width: 960px;
+  margin: 24px auto;
+  padding: 0 20px;
+}
+.page-title {
+  font-size: 20px;
+  border-bottom: 2px solid #3a3a3a;
+  padding-bottom: 6px;
+  margin-bottom: 8px;
+}
+.page-desc {
+  color: #666;
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+.calendar-wrap {
+  background: white;
+  border: 1px solid #ddd;
+  padding: 8px;
+}
+.calendar-wrap iframe {
+  display: block;
+}
+
 /* ===== フッター ===== */
 #footer {
   background: #2c2c2c;
@@ -347,6 +373,10 @@ a:hover {
   padding: 16px;
   margin-top: 40px;
   font-size: 12px;
+}
+#admin-link a {
+  color: #777;
+  font-size: 11px;
 }
 
 /* ===== ローディング ===== */
