@@ -138,9 +138,7 @@ function publishAll() {
 
     ui.alert(
       '更新完了',
-      'サイトを更新しました！\n数分後に反映されます。\n\n' +
-      '・スポ少情報: ' + sportsClubs.length + ' クラブ\n' +
-      '・広報誌: ' + newsletters.length + ' 件',
+      'サイトを更新しました！\n数分後に反映されます。\n',
       ui.ButtonSet.OK
     );
   } catch (e) {
