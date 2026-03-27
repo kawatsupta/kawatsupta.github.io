@@ -40,7 +40,7 @@ function publishAll() {
     'サイトの更新',
     'このスプレッドシートの内容でサイト全体を更新します。\n\n' +
     '・ご挨拶 / 役立ち情報 / リンク集\n' +
-    '・スポ少情報 / 広報誌（暗号化）\n\n' +
+    '・スポ少情報 / 広報誌\n\n' +
     'よろしいですか？',
     ui.ButtonSet.YES_NO
   );
@@ -199,7 +199,7 @@ function pushToGitHub(filepath, content, commitMessage) {
   var payload = {
     message: commitMessage,
     content: Utilities.base64Encode(content, Utilities.Charset.UTF_8),
-    branch: 'main'
+    branch: GITHUB_BRANCH
   };
   if (sha) payload.sha = sha;
 
