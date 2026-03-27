@@ -4,3 +4,4 @@ var GITHUB_TOKEN  = '';  // GitHub Fine-grained Personal Access Token
 var GITHUB_OWNER  = '';  // GitHub アカウント名（例: n-nishizaki）
 var GITHUB_REPO   = '';  // リポジトリ名（例: kawatsu-pta-web）
 var GITHUB_BRANCH = 'main';
+var MEMBER_PASSWORD = '';  // 会員限定ページのパスワード

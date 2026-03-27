@@ -5,11 +5,12 @@
  * Google ドキュメントではなく、スプレッドシート（info）に設定します。
  * スプレッドシートを開いて「拡張機能」→「Apps Script」からこのファイルを貼り付けてください。
  *
- * 【初期設定（スクリプトプロパティに以下を設定）】
+ * 【初期設定】
+ * config.gs に以下を設定してください。
  * GITHUB_TOKEN    : GitHub Fine-grained Personal Access Token (Contents: Read and Write)
  * GITHUB_OWNER    : GitHub アカウント名 (例: n-nishizaki)
  * GITHUB_REPO     : リポジトリ名 (例: kawatsu-pta-web)
- * MEMBER_PASSWORD : 会員限定ページのパスワード（平文で設定。このプロパティはスクリプト管理者のみ閲覧可）
+ * MEMBER_PASSWORD : 会員限定ページのパスワード
  */
 
 // ===== メニューを追加 =====
@@ -24,14 +25,12 @@ function onOpen() {
 function publishAll() {
   var ui = SpreadsheetApp.getUi();
 
-  // パスワードをスクリプトプロパティから取得
-  var props = PropertiesService.getScriptProperties();
-  var memberPassword = props.getProperty('MEMBER_PASSWORD');
+  // パスワードを config.gs から取得
+  var memberPassword = MEMBER_PASSWORD;
   if (!memberPassword) {
     ui.alert(
       '設定エラー',
-      'スクリプトプロパティ「MEMBER_PASSWORD」が設定されていません。\n' +
-      '「プロジェクトの設定」→「スクリプトのプロパティ」から設定してください。',
+      'config.gs の MEMBER_PASSWORD が設定されていません。',
       ui.ButtonSet.OK
     );
     return;
@@ -174,15 +173,13 @@ function encryptXOR(plainText, password) {
 
 // ===== GitHub API でファイルを作成・更新 =====
 function pushToGitHub(filepath, content, commitMessage) {
-  var props = PropertiesService.getScriptProperties();
-  var owner = props.getProperty('GITHUB_OWNER');
-  var repo  = props.getProperty('GITHUB_REPO');
-  var token = props.getProperty('GITHUB_TOKEN');
+  var owner = GITHUB_OWNER;
+  var repo  = GITHUB_REPO;
+  var token = GITHUB_TOKEN;
 
   if (!owner || !repo || !token) {
     throw new Error(
-      'スクリプトプロパティが設定されていません。\n' +
-      'GITHUB_TOKEN, GITHUB_OWNER, GITHUB_REPO を設定してください。'
+      'config.gs の GITHUB_TOKEN, GITHUB_OWNER, GITHUB_REPO を設定してください。'
     );
   }
 
