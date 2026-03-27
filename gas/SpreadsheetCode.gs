@@ -5,29 +5,43 @@
  * Google ドキュメントではなく、スプレッドシート（info）に設定します。
  * スプレッドシートを開いて「拡張機能」→「Apps Script」からこのファイルを貼り付けてください。
  *
- * 【初期設定（スクリプトプロパティに以下を設定）】
+ * 【初期設定】
+ * config.gs に以下を設定してください。
  * GITHUB_TOKEN    : GitHub Fine-grained Personal Access Token (Contents: Read and Write)
  * GITHUB_OWNER    : GitHub アカウント名 (例: n-nishizaki)
  * GITHUB_REPO     : リポジトリ名 (例: kawatsu-pta-web)
- * MEMBER_PASSWORD : 会員限定ページのパスワード（平文で設定。このプロパティはスクリプト管理者のみ閲覧可）
+ * MEMBER_PASSWORD : 会員限定ページのパスワード
  */
 
 // ===== メニューを追加 =====
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('PTA公開')
-    .addItem('サイト情報を更新する（ご挨拶・役立ち情報・リンク集）', 'publishSiteInfo')
-    .addSeparator()
-    .addItem('会員限定ページを更新する（スポ少情報・広報誌）', 'publishMembersInfo')
+    .addItem('サイトを更新する', 'publishAll')
     .addToUi();
 }
 
-// ===== サイト情報を更新（一般公開） =====
-function publishSiteInfo() {
+// ===== サイト全体を更新（一般公開 + 会員限定） =====
+function publishAll() {
   var ui = SpreadsheetApp.getUi();
+
+  // パスワードを config.gs から取得
+  var memberPassword = MEMBER_PASSWORD;
+  if (!memberPassword) {
+    ui.alert(
+      '設定エラー',
+      'config.gs の MEMBER_PASSWORD が設定されていません。',
+      ui.ButtonSet.OK
+    );
+    return;
+  }
+
   var result = ui.alert(
-    'サイト情報の更新',
-    'このスプレッドシートの内容でご挨拶・役立ち情報・リンク集を更新します。\nよろしいですか？',
+    'サイトの更新',
+    'このスプレッドシートの内容でサイト全体を更新します。\n\n' +
+    '・ご挨拶 / 役立ち情報 / リンク集\n' +
+    '・スポ少情報 / 広報誌\n\n' +
+    'よろしいですか？',
     ui.ButtonSet.YES_NO
   );
   if (result !== ui.Button.YES) {
@@ -78,53 +92,11 @@ function publishSiteInfo() {
     var infoJson = JSON.stringify({ links: links, ext_links: extLinks });
     pushToGitHub('_data/info.json', infoJson, '役立ち情報・リンク集を更新');
 
-    ui.alert(
-      '更新完了',
-      'サイト情報を更新しました！\n数分後にサイトに反映されます。',
-      ui.ButtonSet.OK
-    );
-  } catch (e) {
-    ui.alert('エラー', '更新に失敗しました。\n\nエラー内容:\n' + e.message, ui.ButtonSet.OK);
-    console.error(e);
-  }
-}
-
-// ===== 会員限定ページを更新（スポ少情報・広報誌） =====
-function publishMembersInfo() {
-  var ui = SpreadsheetApp.getUi();
-
-  // パスワードをスクリプトプロパティから取得
-  var props = PropertiesService.getScriptProperties();
-  var memberPassword = props.getProperty('MEMBER_PASSWORD');
-  if (!memberPassword) {
-    ui.alert(
-      '設定エラー',
-      'スクリプトプロパティ「MEMBER_PASSWORD」が設定されていません。\n' +
-      '「プロジェクトの設定」→「スクリプトのプロパティ」から設定してください。',
-      ui.ButtonSet.OK
-    );
-    return;
-  }
-
-  var result = ui.alert(
-    '会員限定ページの更新',
-    'スポ少情報・広報誌の内容を暗号化してサイトに反映します。\nよろしいですか？',
-    ui.ButtonSet.YES_NO
-  );
-  if (result !== ui.Button.YES) {
-    ui.alert('キャンセルしました。');
-    return;
-  }
-
-  try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
-
     // --- スポ少情報（A=クラブ名, B=活動時間, C=対象学年, D=連絡先）---
     var sportsSheet = ss.getSheetByName('スポ少情報');
     var sportsClubs = [];
     if (sportsSheet) {
       var sportsRows = sportsSheet.getDataRange().getValues();
-      // 1行目がヘッダーの場合はスキップ
       var startRow = (String(sportsRows[0][0]).trim() === 'クラブ名') ? 1 : 0;
       for (var i = startRow; i < sportsRows.length; i++) {
         var row = sportsRows[i];
@@ -160,17 +132,13 @@ function publishMembersInfo() {
       sports_clubs: sportsClubs,
       newsletters:  newsletters
     });
-
     var encrypted = encryptXOR(plainJson, memberPassword);
     var membersJson = JSON.stringify({ data: encrypted });
-
     pushToGitHub('data/members.json', membersJson, '会員限定ページを更新');
 
     ui.alert(
       '更新完了',
-      '会員限定ページを更新しました！\n数分後にサイトに反映されます。\n\n' +
-      '・スポ少情報: ' + sportsClubs.length + ' クラブ\n' +
-      '・広報誌: ' + newsletters.length + ' 件',
+      'サイトを更新しました！\n数分後に反映されます。\n',
       ui.ButtonSet.OK
     );
   } catch (e) {
@@ -203,15 +171,13 @@ function encryptXOR(plainText, password) {
 
 // ===== GitHub API でファイルを作成・更新 =====
 function pushToGitHub(filepath, content, commitMessage) {
-  var props = PropertiesService.getScriptProperties();
-  var owner = props.getProperty('GITHUB_OWNER');
-  var repo  = props.getProperty('GITHUB_REPO');
-  var token = props.getProperty('GITHUB_TOKEN');
+  var owner = GITHUB_OWNER;
+  var repo  = GITHUB_REPO;
+  var token = GITHUB_TOKEN;
 
   if (!owner || !repo || !token) {
     throw new Error(
-      'スクリプトプロパティが設定されていません。\n' +
-      'GITHUB_TOKEN, GITHUB_OWNER, GITHUB_REPO を設定してください。'
+      'config.gs の GITHUB_TOKEN, GITHUB_OWNER, GITHUB_REPO を設定してください。'
     );
   }
 
@@ -231,7 +197,7 @@ function pushToGitHub(filepath, content, commitMessage) {
   var payload = {
     message: commitMessage,
     content: Utilities.base64Encode(content, Utilities.Charset.UTF_8),
-    branch: 'main'
+    branch: GITHUB_BRANCH
   };
   if (sha) payload.sha = sha;
 
