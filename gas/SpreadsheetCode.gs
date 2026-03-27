@@ -138,7 +138,7 @@ function publishAll() {
 
     ui.alert(
       '更新完了',
-      'サイトを更新しました！\n数分後に反映されます。\n',
+      'サイトを更新しました！\n数分後に反映されます。',
       ui.ButtonSet.OK
     );
   } catch (e) {
